@@ -1,4 +1,4 @@
-defmodule Circuit.MixProject do
+defmodule TripSwitch.MixProject do
   use Mix.Project
 
   @version "0.1.0"
@@ -6,7 +6,7 @@ defmodule Circuit.MixProject do
 
   def project do
     [
-      app: :circuit,
+      app: :trip_switch,
       version: @version,
       elixir: "~> 1.13",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -44,7 +44,7 @@ defmodule Circuit.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {Circuit.Application, []}
+      mod: {TripSwitch.Application, []}
     ]
   end
 

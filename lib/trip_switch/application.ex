@@ -1,4 +1,4 @@
-defmodule Circuit.Application do
+defmodule TripSwitch.Application do
   # See https://hexdocs.pm/elixir/Application.html
   # for more information on OTP Applications
   @moduledoc false
@@ -12,13 +12,13 @@ defmodule Circuit.Application do
     Confex.resolve_env!(@otp_app)
 
     children = [
-      # Starts a worker by calling: Circuit.Worker.start_link(arg)
-      # {Circuit.Worker, arg}
+      {Registry, keys: :unique, name: TripSwitch.Registry},
+      {DynamicSupervisor, strategy: :one_for_one, name: TripSwitch.DynamicSupervisor}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options
-    opts = [strategy: :one_for_one, name: Circuit.Supervisor]
+    opts = [strategy: :one_for_one, name: TripSwitch.Supervisor]
     Supervisor.start_link(children, opts)
   end
 end
