@@ -17,7 +17,7 @@ defmodule TripSwitch.MixProject do
       package: [
         files: ["lib", "mix.exs", "CHANGELOG.md", "README.md"],
         maintainers: ["Rasheed Atanda"],
-        licenses: ["MIT License"],
+        licenses: ["MIT"],
         links: %{
           "Docs" => @docs_url,
           "GitHub" => @scm_url
@@ -67,12 +67,10 @@ defmodule TripSwitch.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:confex, "~> 3.5"},
       {:credo, "~> 1.6", only: :dev, runtime: false},
       {:dialyxir, "~> 1.2", only: :dev, runtime: false},
       {:ex_doc, "~> 0.29", only: :dev, runtime: false},
       {:excoveralls, "~> 0.15", only: :test},
-      {:faker, "~> 0.17", only: :test},
       {:git_hooks, "~> 0.7", only: :dev, runtime: false},
       {:git_ops, "~> 2.5", only: :dev}
     ]

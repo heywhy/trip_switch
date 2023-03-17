@@ -5,12 +5,8 @@ defmodule TripSwitch.Application do
 
   use Application
 
-  @otp_app :circuit
-
   @impl true
   def start(_type, _args) do
-    Confex.resolve_env!(@otp_app)
-
     children = [
       {Registry, keys: :unique, name: TripSwitch.Registry},
       {DynamicSupervisor, strategy: :one_for_one, name: TripSwitch.DynamicSupervisor}
