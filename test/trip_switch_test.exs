@@ -2,7 +2,7 @@ defmodule TripSwitchTest do
   @moduledoc false
   use ExUnit.Case
 
-  alias TripSwitch.Circuit
+  alias TripSwitch.Breaker
 
   @switch :home
   @event_prefix :trip_switch
@@ -38,7 +38,7 @@ defmodule TripSwitchTest do
   end
 
   test "get/1" do
-    assert %Circuit{state: :closed} = TripSwitch.get(@switch)
+    assert %Breaker{state: :closed} = TripSwitch.get(@switch)
   end
 
   test "send/2" do
@@ -49,7 +49,7 @@ defmodule TripSwitchTest do
     assert_received {[@event_prefix, :signal, :stop], _ref, _measurements, %{id: @switch}}
   end
 
-  test "send/2 breaks circuit after failure threshold is reached" do
+  test "send/2 breaks switch after failure threshold is reached" do
     for _ <- 1..3 do
       TripSwitch.send(@switch, fn -> {:break, 90} end)
     end
@@ -57,39 +57,32 @@ defmodule TripSwitchTest do
     assert :broken = TripSwitch.send(@switch, fn -> {:ok, 1} end)
   end
 
-  test "send/2 auto repair circuit" do
+  test "send/2 auto repair switch" do
     :ok = destroy(@switch)
 
-    assert %Circuit{state: :open} = TripSwitch.get(@switch)
+    assert %Breaker{state: :open} = TripSwitch.get(@switch)
     Process.sleep(100)
-    assert %Circuit{state: :half_open} = TripSwitch.get(@switch)
+    assert %Breaker{state: :half_open} = TripSwitch.get(@switch)
     assert {:ok, :good} = TripSwitch.send(@switch, fn -> {:ok, :good} end)
     assert_received {[@event_prefix, :repair, :done], _ref, _mesurement, %{id: @switch}}
   end
 
-  test "send/2 auto repaired circuit goes back to half_open" do
+  test "send/2 auto repaired switch goes back to half_open" do
     :ok = destroy(@switch)
 
     Process.sleep(100)
 
     assert :broken = TripSwitch.send(@switch, fn -> {:break, :unwell} end)
-    assert %Circuit{state: :open} = TripSwitch.get(@switch)
+    assert %Breaker{state: :open} = TripSwitch.get(@switch)
   end
 
   test "reset/1" do
-    try do
-      assert :ok = TripSwitch.reset(@switch)
-      TripSwitch.reset(:unknown)
-    catch
-      :exit, {reason, _} -> send(self(), {:unknown_circuit_failed, reason})
-    after
-      assert_received {:unknown_circuit_failed, :noproc}
-    end
+    assert :ok = TripSwitch.reset(@switch)
   end
 
-  defp destroy(circuit) do
+  defp destroy(switch) do
     for _ <- 1..3 do
-      TripSwitch.send(circuit, fn -> {:break, 90} end)
+      TripSwitch.send(switch, fn -> {:break, 90} end)
     end
 
     :ok

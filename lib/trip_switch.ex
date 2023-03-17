@@ -4,25 +4,25 @@ defmodule TripSwitch do
   """
   use GenServer
 
-  alias TripSwitch.Circuit
+  alias TripSwitch.Breaker
 
   @event_prefix :trip_switch
 
   @spec broken?(atom()) :: boolean()
-  def broken?(id), do: Circuit.broken?(get(id))
+  def broken?(id), do: Breaker.broken?(get(id))
 
-  @spec send(atom(), Circuit.signal()) :: {:ok, term()} | :broken
+  @spec send(atom(), Breaker.signal()) :: {:ok, term()} | :broken
   def send(id, signal) do
     :telemetry.span([@event_prefix, :signal], %{id: id}, fn ->
-      with %Circuit{} = circuit <- get(id),
-           {result, circuit} <- Circuit.handle(circuit, signal),
-           :ok <- GenServer.call(via(id), {:save, circuit}) do
+      with %Breaker{} = breaker <- get(id),
+           {result, breaker} <- Breaker.handle(breaker, signal),
+           :ok <- GenServer.call(via(id), {:save, breaker}) do
         {result, %{id: id}}
       end
     end)
   end
 
-  @spec get(atom()) :: Circuit.t()
+  @spec get(atom()) :: Breaker.t()
   def get(id), do: GenServer.call(via(id), :get)
 
   @spec reset(atom()) :: :ok
@@ -38,7 +38,7 @@ defmodule TripSwitch do
   end
 
   @impl GenServer
-  def init(opts), do: {:ok, %{circuit: Circuit.new(opts), repair: nil}}
+  def init(opts), do: {:ok, %{breaker: Breaker.new(opts), repair: nil}}
 
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts) do
@@ -48,28 +48,28 @@ defmodule TripSwitch do
   end
 
   @impl GenServer
-  def handle_call(:get, _from, %{circuit: circuit} = state) do
-    {:reply, circuit, state}
+  def handle_call(:get, _from, %{breaker: breaker} = state) do
+    {:reply, breaker, state}
   end
 
-  def handle_call(:reset, _from, %{circuit: circuit} = state) do
-    state = cancel_timer(%{state | circuit: Circuit.reset(circuit)})
+  def handle_call(:reset, _from, %{breaker: breaker} = state) do
+    state = cancel_timer(%{state | breaker: Breaker.reset(breaker)})
 
     {:reply, :ok, state}
   end
 
-  def handle_call({:save, circuit}, _from, state) do
-    state = schedule_or_cancel_repair(circuit, state)
+  def handle_call({:save, breaker}, _from, state) do
+    state = schedule_or_cancel_repair(breaker, state)
 
     {:reply, :ok, state}
   end
 
   @impl GenServer
-  def handle_info(:repair, %{circuit: circuit} = state) do
+  def handle_info(:repair, %{breaker: breaker} = state) do
     [id] = Registry.keys(TripSwitch.Registry, self())
 
     state =
-      Circuit.repair(circuit)
+      Breaker.repair(breaker)
       |> schedule_or_cancel_repair(state)
 
     :telemetry.execute([@event_prefix, :repair, :done], %{}, %{id: id})
@@ -77,14 +77,14 @@ defmodule TripSwitch do
     {:noreply, state}
   end
 
-  defp schedule_or_cancel_repair(%Circuit{fix_after: at} = circuit, state) do
-    with {:a, true} <- {:a, Circuit.repairable?(circuit)},
+  defp schedule_or_cancel_repair(%Breaker{fix_after: at} = breaker, state) do
+    with {:a, true} <- {:a, Breaker.repairable?(breaker)},
          {:b, false} <- {:b, is_reference(state.repair)},
          timer <- Process.send_after(self(), :repair, at) do
-      %{state | circuit: circuit, repair: timer}
+      %{state | breaker: breaker, repair: timer}
     else
-      {:a, false} -> cancel_timer(%{state | circuit: circuit})
-      {:b, true} -> %{state | circuit: circuit}
+      {:a, false} -> cancel_timer(%{state | breaker: breaker})
+      {:b, true} -> %{state | breaker: breaker}
     end
   end
 
