@@ -7,12 +7,12 @@ defmodule TripSwitchTest do
   @circuit :home
 
   setup_all do
-    start_supervised!({TripSwitch, name: @circuit, capacity: 3, fix_after: 100})
+    start_supervised!({TripSwitch, name: @circuit, threshold: 0.9, fix_after: 100})
     :ok
   end
 
   setup do
-    on_exit(fn -> :ok = TripSwitch.reset(@circuit) end)
+    on_exit(fn -> TripSwitch.reset(@circuit) end)
   end
 
   test "child_spec/1" do
@@ -25,7 +25,7 @@ defmodule TripSwitchTest do
 
   test "get/1" do
     refute TripSwitch.get(:unknown)
-    assert %Circuit{state: :closed, capacity: 3} = TripSwitch.get(@circuit)
+    assert %Circuit{state: :closed} = TripSwitch.get(@circuit)
   end
 
   test "send/2" do
@@ -33,7 +33,7 @@ defmodule TripSwitchTest do
     assert {:ok, 90} = TripSwitch.send(@circuit, fn -> {:break, 90} end)
   end
 
-  test "send/2 breaks circuit after failure capacity is reached" do
+  test "send/2 breaks circuit after failure threshold is reached" do
     for _ <- 1..3 do
       TripSwitch.send(@circuit, fn -> {:break, 90} end)
     end
@@ -49,6 +49,18 @@ defmodule TripSwitchTest do
     assert %Circuit{state: :open} = TripSwitch.get(@circuit)
     Process.sleep(100)
     assert %Circuit{state: :half_open} = TripSwitch.get(@circuit)
+    assert {:ok, :good} = TripSwitch.send(@circuit, fn -> {:ok, :good} end)
+  end
+
+  test "send/2 auto repaired circuit goes back to half_open" do
+    for _ <- 1..3 do
+      TripSwitch.send(@circuit, fn -> {:break, 90} end)
+    end
+
+    Process.sleep(100)
+
+    assert :broken = TripSwitch.send(@circuit, fn -> {:break, :unwell} end)
+    assert %Circuit{state: :open} = TripSwitch.get(@circuit)
   end
 
   test "reset/1" do

@@ -49,7 +49,9 @@ defmodule TripSwitch do
   end
 
   def handle_call(:reset, _from, %{circuit: circuit} = state) do
-    {:reply, :ok, %{state | circuit: Circuit.reset(circuit)}}
+    state = cancel_timer(%{state | circuit: Circuit.reset(circuit)})
+
+    {:reply, :ok, state}
   end
 
   def handle_call({:send, signal}, _from, %{circuit: circuit} = state) do
@@ -86,12 +88,18 @@ defmodule TripSwitch do
   end
 
   defp schedule_or_cancel_repair(%Circuit{} = circuit, state) do
-    case state.repair do
-      nil -> :ok
-      ref -> Process.cancel_timer(ref)
-    end
+    cancel_timer(%{state | circuit: circuit})
+  end
 
-    %{state | circuit: circuit, repair: nil}
+  defp cancel_timer(state) do
+    case state.repair do
+      ref when is_reference(ref) ->
+        Process.cancel_timer(ref)
+        %{state | repair: nil}
+
+      nil ->
+        state
+    end
   end
 
   defp via(id), do: {:via, Registry, {TripSwitch.Registry, id}}
