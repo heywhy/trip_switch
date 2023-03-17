@@ -25,5 +25,5 @@ config :git_ops,
   mix_project: Mix.Project.get!(),
   manage_mix_version?: true,
   manage_readme_version: true,
-  repository_url: :unset,
+  repository_url: "https://github.com/heywhy/trip_switch",
   version_tag_prefix: "v"

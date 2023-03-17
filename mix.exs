@@ -2,7 +2,8 @@ defmodule TripSwitch.MixProject do
   use Mix.Project
 
   @version "0.1.0"
-  @scm_url :unset
+  @scm_url "https://github.com/heywhy/trip_switch"
+  @docs_url "https://hexdocs.pm/trip_switch"
 
   def project do
     [
@@ -15,12 +16,14 @@ defmodule TripSwitch.MixProject do
       aliases: aliases(),
       package: [
         files: ["lib", "mix.exs", "CHANGELOG.md", "README.md"],
-        licenses: [],
+        maintainers: ["Rasheed Atanda"],
+        licenses: ["MIT License"],
         links: %{
+          "Docs" => @docs_url,
           "GitHub" => @scm_url
         }
       ],
-      description: :unset,
+      description: "A circuit breaker implementation for Elixir.",
 
       # Coverage
       test_coverage: [tool: ExCoveralls],
@@ -36,6 +39,15 @@ defmodule TripSwitch.MixProject do
       dialyzer: [
         plt_file: {:no_warn, "priv/plts/dialyzer.plt"},
         plt_add_apps: []
+      ],
+
+      # Docs
+      name: "TripSwitch",
+      source_url: @scm_url,
+      homepage_url: @docs_url,
+      docs: [
+        main: "TripSwitch",
+        extras: ["README.md", "LICENSE"]
       ]
     ]
   end
