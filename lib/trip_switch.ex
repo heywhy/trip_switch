@@ -8,6 +8,9 @@ defmodule TripSwitch do
 
   @event_prefix :trip_switch
 
+  @spec broken?(atom()) :: boolean()
+  def broken?(id), do: Circuit.broken?(get(id))
+
   @spec send(atom(), Circuit.signal()) :: {:ok, term()} | :broken
   def send(id, signal) do
     :telemetry.span([@event_prefix, :signal], %{id: id}, fn ->
@@ -19,18 +22,11 @@ defmodule TripSwitch do
     end)
   end
 
-  @spec get(atom()) :: Circuit.t() | nil
-  def get(id) do
-    case Registry.lookup(TripSwitch.Registry, id) do
-      [] -> nil
-      [{pid, _}] -> GenServer.call(pid, :get)
-    end
-  end
+  @spec get(atom()) :: Circuit.t()
+  def get(id), do: GenServer.call(via(id), :get)
 
   @spec reset(atom()) :: :ok
-  def reset(id) do
-    GenServer.call(via(id), :reset)
-  end
+  def reset(id), do: GenServer.call(via(id), :reset)
 
   @spec child_spec(keyword()) :: Supervisor.child_spec()
   def child_spec(opts) do
