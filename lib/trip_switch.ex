@@ -6,9 +6,17 @@ defmodule TripSwitch do
 
   alias TripSwitch.Circuit
 
+  @event_prefix :trip_switch
+
   @spec send(atom(), Circuit.signal()) :: {:ok, term()} | :broken
   def send(id, signal) do
-    GenServer.call(via(id), {:send, signal})
+    :telemetry.span([@event_prefix, :signal], %{id: id}, fn ->
+      with %Circuit{} = circuit <- get(id),
+           {result, circuit} <- Circuit.handle(circuit, signal),
+           :ok <- GenServer.call(via(id), {:save, circuit}) do
+        {result, %{id: id}}
+      end
+    end)
   end
 
   @spec get(atom()) :: Circuit.t() | nil
@@ -54,18 +62,21 @@ defmodule TripSwitch do
     {:reply, :ok, state}
   end
 
-  def handle_call({:send, signal}, _from, %{circuit: circuit} = state) do
-    {result, circuit} = Circuit.handle(circuit, signal)
+  def handle_call({:save, circuit}, _from, state) do
     state = schedule_or_cancel_repair(circuit, state)
 
-    {:reply, result, state}
+    {:reply, :ok, state}
   end
 
   @impl GenServer
   def handle_info(:repair, %{circuit: circuit} = state) do
+    [id] = Registry.keys(TripSwitch.Registry, self())
+
     state =
       Circuit.repair(circuit)
       |> schedule_or_cancel_repair(state)
+
+    :telemetry.execute([@event_prefix, :repair, :done], %{}, %{id: id})
 
     {:noreply, state}
   end

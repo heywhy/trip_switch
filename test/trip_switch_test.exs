@@ -5,6 +5,12 @@ defmodule TripSwitchTest do
   alias TripSwitch.Circuit
 
   @circuit :home
+  @event_prefix :trip_switch
+  @events [
+    [@event_prefix, :repair, :done],
+    [@event_prefix, :signal, :start],
+    [@event_prefix, :signal, :stop]
+  ]
 
   setup_all do
     start_supervised!({TripSwitch, name: @circuit, threshold: 0.9, fix_after: 100})
@@ -12,6 +18,8 @@ defmodule TripSwitchTest do
   end
 
   setup do
+    :telemetry_test.attach_event_handlers(self(), @events)
+
     on_exit(fn -> TripSwitch.reset(@circuit) end)
   end
 
@@ -31,6 +39,9 @@ defmodule TripSwitchTest do
   test "send/2" do
     assert {:ok, 9} = TripSwitch.send(@circuit, fn -> {:ok, 9} end)
     assert {:ok, 90} = TripSwitch.send(@circuit, fn -> {:break, 90} end)
+
+    assert_received {[@event_prefix, :signal, :start], _ref, _measurements, %{id: @circuit}}
+    assert_received {[@event_prefix, :signal, :stop], _ref, _measurements, %{id: @circuit}}
   end
 
   test "send/2 breaks circuit after failure threshold is reached" do
@@ -50,6 +61,7 @@ defmodule TripSwitchTest do
     Process.sleep(100)
     assert %Circuit{state: :half_open} = TripSwitch.get(@circuit)
     assert {:ok, :good} = TripSwitch.send(@circuit, fn -> {:ok, :good} end)
+    assert_received {[@event_prefix, :repair, :done], _ref, _mesurement, %{id: @circuit}}
   end
 
   test "send/2 auto repaired circuit goes back to half_open" do

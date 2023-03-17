@@ -72,7 +72,8 @@ defmodule TripSwitch.MixProject do
       {:ex_doc, "~> 0.29", only: :dev, runtime: false},
       {:excoveralls, "~> 0.15", only: :test},
       {:git_hooks, "~> 0.7", only: :dev, runtime: false},
-      {:git_ops, "~> 2.5", only: :dev}
+      {:git_ops, "~> 2.5", only: :dev},
+      {:telemetry, "~> 1.2"}
     ]
   end
 
