@@ -29,6 +29,13 @@ defmodule TripSwitch.Circuit do
     struct!(__MODULE__, attrs)
   end
 
+  @spec broken?(t()) :: boolean()
+  def broken?(%__MODULE__{state: :closed}), do: false
+  def broken?(%__MODULE__{}), do: true
+
+  @spec repairable?(t()) :: boolean()
+  def repairable?(%__MODULE__{fix_after: t} = circuit), do: broken?(circuit) and t > 0
+
   @spec handle(t(), signal()) :: {{:ok, term()} | :broken, t()}
   def handle(%__MODULE__{state: :open} = circuit, _signal), do: {:broken, circuit}
 
@@ -47,8 +54,11 @@ defmodule TripSwitch.Circuit do
   end
 
   @spec repair(t()) :: t()
-  def repair(%__MODULE__{state: :open} = circuit) do
-    struct!(circuit, state: :half_open)
+  def repair(%__MODULE__{} = circuit) do
+    case repairable?(circuit) do
+      false -> circuit
+      true -> struct!(circuit, state: :half_open, counter: 0, surges: 0)
+    end
   end
 
   @spec reset(t()) :: t()

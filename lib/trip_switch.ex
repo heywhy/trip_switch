@@ -56,7 +56,6 @@ defmodule TripSwitch do
 
   def handle_call({:send, signal}, _from, %{circuit: circuit} = state) do
     {result, circuit} = Circuit.handle(circuit, signal)
-
     state = schedule_or_cancel_repair(circuit, state)
 
     {:reply, result, state}
@@ -64,31 +63,22 @@ defmodule TripSwitch do
 
   @impl GenServer
   def handle_info(:repair, %{circuit: circuit} = state) do
-    state = schedule_or_cancel_repair(Circuit.repair(circuit), state)
+    state =
+      Circuit.repair(circuit)
+      |> schedule_or_cancel_repair(state)
 
     {:noreply, state}
   end
 
-  defp schedule_or_cancel_repair(
-         %Circuit{state: :open, fix_after: time} = circuit,
-         %{repair: nil} = state
-       )
-       when time > 0 do
-    timer = Process.send_after(self(), :repair, time)
-
-    %{state | circuit: circuit, repair: timer}
-  end
-
-  defp schedule_or_cancel_repair(
-         %Circuit{state: :open} = circuit,
-         %{repair: ref} = state
-       )
-       when is_reference(ref) do
-    %{state | circuit: circuit}
-  end
-
-  defp schedule_or_cancel_repair(%Circuit{} = circuit, state) do
-    cancel_timer(%{state | circuit: circuit})
+  defp schedule_or_cancel_repair(%Circuit{fix_after: at} = circuit, state) do
+    with {:a, true} <- {:a, Circuit.repairable?(circuit)},
+         {:b, false} <- {:b, is_reference(state.repair)},
+         timer <- Process.send_after(self(), :repair, at) do
+      %{state | circuit: circuit, repair: timer}
+    else
+      {:a, false} -> cancel_timer(%{state | circuit: circuit})
+      {:b, true} -> %{state | circuit: circuit}
+    end
   end
 
   defp cancel_timer(state) do
