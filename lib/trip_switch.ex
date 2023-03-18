@@ -11,14 +11,14 @@ defmodule TripSwitch do
   ## Signal
 
   A signal is simple a function that gets invoked. The state of the trip switch gets
-  updated based on the result of this signal, see `t:TripSwitch.Breaker.signal/0`.
+  updated based on the result (current) of this signal, see `t:TripSwitch.signal/0`.
 
   ### Examples
 
       iex> TripSwitch.send(id, fn -> {:ok, :good} end)
       {:ok, :good}
-      iex> TripSwitch.send(id, fn -> {:break, :good} end) # record this signal as a failure
-      {:ok, :good}
+      iex> TripSwitch.send(id, fn -> {:error, :bad} end) # record this signal as a failure
+      {:error, :bad}
 
   Note that a switch only stops invoking a signal after the failure threshold have been
   reached. In this case, the switch keeps is considered `broken` until it's repaired.
@@ -84,6 +84,8 @@ defmodule TripSwitch do
 
   alias TripSwitch.Breaker
 
+  @type signal :: (() -> Breaker.current())
+
   @event_prefix :trip_switch
 
   @doc """
@@ -109,18 +111,21 @@ defmodule TripSwitch do
 
       iex> TripSwitch.send(:switch, fn -> {:ok, %{name: "a"}}) end)
       {:ok, %{name: "a"}}
-      iex> TripSwitch.send(:switch, fn -> {:break, {:error, :not_found}} end)
+      iex> TripSwitch.send(:switch, fn -> {:error, :not_found} end)
       {:error, :not_found}
   """
-  @spec send(atom(), Breaker.signal()) :: {:ok, term()} | :broken
+  @spec send(atom(), signal()) :: {:ok, term()} | :broken
   def send(id, signal) do
     metadata = %{id: id, tag: FlakeId.get()}
 
     :telemetry.span([@event_prefix, :signal], metadata, fn ->
       with %Breaker{} = breaker <- get(id),
-           {result, breaker} <- Breaker.handle(breaker, signal),
+           false <- Breaker.broken?(breaker),
+           {result, breaker} <- Breaker.handle(breaker, signal.()),
            :ok <- GenServer.call(via(id), {:save, breaker}) do
         {result, metadata}
+      else
+        true -> {:broken, metadata}
       end
     end)
   end
@@ -177,9 +182,7 @@ defmodule TripSwitch do
 
   @impl GenServer
   def handle_info({:repair, start_time, tag}, %{breaker: breaker} = state) do
-    state =
-      Breaker.repair(breaker)
-      |> schedule_or_cancel_repair(state)
+    state = cancel_timer(%{state | breaker: Breaker.repair(breaker)})
 
     :ok = emit_repair_stop_event(get_id(), start_time, tag)
 
@@ -187,14 +190,13 @@ defmodule TripSwitch do
   end
 
   defp schedule_or_cancel_repair(%Breaker{repair_time: at} = breaker, state) do
-    with {:a, true} <- {:a, Breaker.repairable?(breaker)},
-         {:b, false} <- {:b, is_reference(state.repair)},
+    with true <- Breaker.repairable?(breaker),
+         state <- cancel_timer(state),
          {start_time, tag} <- emit_repair_start_event(get_id()),
          timer <- Process.send_after(self(), {:repair, start_time, tag}, at) do
       %{state | breaker: breaker, repair: timer}
     else
-      {:a, false} -> cancel_timer(%{state | breaker: breaker})
-      {:b, true} -> %{state | breaker: breaker}
+      false -> cancel_timer(%{state | breaker: breaker})
     end
   end
 

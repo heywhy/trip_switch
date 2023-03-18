@@ -37,8 +37,9 @@ defmodule TripSwitchTest do
   end
 
   test "send/2" do
-    assert {:ok, 9} = TripSwitch.send(@switch, fn -> {:ok, 9} end)
-    assert {:ok, 90} = TripSwitch.send(@switch, fn -> {:break, 90} end)
+    assert {:ok, %{}} = TripSwitch.send(@switch, fn -> {:ok, %{}} end)
+    assert {:error, :not_found} = TripSwitch.send(@switch, fn -> {:error, :not_found} end)
+    refute TripSwitch.broken?(@switch)
 
     assert_received {[@event_prefix, :signal, :start], _ref, _measurements,
                      %{id: @switch, tag: tag}}
@@ -49,7 +50,7 @@ defmodule TripSwitchTest do
 
   test "send/2 breaks switch after failure threshold is reached" do
     for _ <- 1..3 do
-      TripSwitch.send(@switch, fn -> {:break, 90} end)
+      TripSwitch.send(@switch, fn -> {:error, :break} end)
     end
 
     assert :broken = TripSwitch.send(@switch, fn -> {:ok, 1} end)
@@ -58,8 +59,9 @@ defmodule TripSwitchTest do
   test "send/2 auto repair switch" do
     :ok = destroy(@switch)
 
-    assert TripSwitch.broken?(@switch)
+    # sleep for some time to get the switch repaired
     Process.sleep(100)
+
     assert {:ok, :good} = TripSwitch.send(@switch, fn -> {:ok, :good} end)
 
     assert_received {[@event_prefix, :repair, :start], _ref, _mesurement,
@@ -74,7 +76,7 @@ defmodule TripSwitchTest do
 
     Process.sleep(100)
 
-    assert :broken = TripSwitch.send(@switch, fn -> {:break, :unwell} end)
+    assert {:error, :unwell} = TripSwitch.send(@switch, fn -> {:error, :unwell} end)
     assert TripSwitch.broken?(@switch)
   end
 
@@ -84,7 +86,7 @@ defmodule TripSwitchTest do
 
   defp destroy(switch) do
     for _ <- 1..3 do
-      TripSwitch.send(switch, fn -> {:break, 90} end)
+      TripSwitch.send(switch, fn -> {:error, :break} end)
     end
 
     :ok

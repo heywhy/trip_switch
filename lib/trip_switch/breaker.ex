@@ -1,22 +1,22 @@
 defmodule TripSwitch.Breaker do
   @moduledoc """
   This is the underlying model which the trip switch uses. A breaker
-  keeps track of number of signals it received and also the count
-  of surges it got from the signals it has handled. A breaker
+  keeps track of number of currents it received and also the count
+  of surges it got from the currents it has handled. A breaker
   has three states, `closed`, `open` and `half_open`. The
   closed state is considered the working state while the
   remaining states are broken states.
 
   The only time a breaker enters the `half_open` state is when it just
-  got repaired after it got broken from a bad signal it handled. The
+  got repaired after it got broken from a bad current it handled. The
   breaker is then transitioned into the `closed` state (if the next
-  signal is a good one) or `open` state (if the next signal is bad).
+  current is a good one) or `open` state (if the next current is bad).
   """
 
   defstruct [:surges, :counter, :state, :threshold, :repair_time]
 
   @type state :: :closed | :half_open | :open
-  @type signal :: (() -> {:ok, term()} | {:break, term()})
+  @type current :: {:error | :ok, term()}
 
   @type t :: %__MODULE__{
           state: state(),
@@ -41,8 +41,8 @@ defmodule TripSwitch.Breaker do
 
   @doc "Check if the breaker is broken."
   @spec broken?(t()) :: boolean()
-  def broken?(%__MODULE__{state: :closed}), do: false
-  def broken?(%__MODULE__{}), do: true
+  def broken?(%__MODULE__{state: :open}), do: true
+  def broken?(%__MODULE__{}), do: false
 
   @doc """
   Confirm if breaker is repairable.
@@ -53,22 +53,20 @@ defmodule TripSwitch.Breaker do
   def repairable?(%__MODULE__{repair_time: t} = breaker), do: broken?(breaker) and t > 0
 
   @doc """
-  Handle the given signal and transition the breaker state if needed.
+  Handle the given current and transition the breaker state if needed.
   """
-  @spec handle(t(), signal()) :: {{:ok, term()} | :broken, t()}
-  def handle(%__MODULE__{state: :open} = breaker, _signal), do: {:broken, breaker}
-
-  def handle(%__MODULE__{state: :half_open} = breaker, signal) do
-    case signal.() do
+  @spec handle(t(), current()) :: {current(), t()}
+  def handle(%__MODULE__{state: :half_open} = breaker, current) do
+    case current do
       {:ok, _value} = return -> {return, increase_counter(reset(breaker))}
-      {:break, _result} -> {:broken, struct!(breaker, state: :open)}
+      {:error, _reason} = return -> {return, struct!(breaker, state: :open)}
     end
   end
 
-  def handle(%__MODULE__{state: :closed} = breaker, signal) do
-    case signal.() do
+  def handle(%__MODULE__{state: :closed} = breaker, current) do
+    case current do
       {:ok, _value} = return -> {return, increase_counter(breaker)}
-      {:break, result} -> {{:ok, result}, surge(increase_counter(breaker))}
+      {:error, _reason} = return -> {return, surge(increase_counter(breaker))}
     end
   end
 

@@ -10,7 +10,7 @@ defmodule TripSwitch.BreakerTest do
 
   test "broken breaker with heal time repaired", %{breaker: breaker} do
     assert Breaker.repair(breaker) == breaker
-    assert {{:ok, :melt}, breaker} = Breaker.handle(breaker, fn -> {:break, :melt} end)
+    assert {{:error, :unwell}, breaker} = Breaker.handle(breaker, {:error, :unwell})
     refute Breaker.repair(breaker) == breaker
   end
 
@@ -20,21 +20,21 @@ defmodule TripSwitch.BreakerTest do
     assert Breaker.repair(breaker) == breaker
   end
 
-  test "increment counter on good signal", %{breaker: breaker} do
-    assert {{:ok, :good}, breaker} = Breaker.handle(breaker, fn -> {:ok, :good} end)
+  test "increment counter on good current", %{breaker: breaker} do
+    assert {{:ok, :good}, breaker} = Breaker.handle(breaker, {:ok, :good})
     assert %Breaker{counter: 1, state: :closed, surges: 0} = breaker
   end
 
-  test "increment surges on bad signal and open breaker", %{breaker: breaker} do
-    assert {{:ok, :bad}, breaker} = destroy(breaker)
+  test "increment surges on bad current and open breaker", %{breaker: breaker} do
+    assert {{:error, :bad}, breaker} = destroy(breaker)
     assert %Breaker{counter: 1, state: :open, surges: 1} = breaker
   end
 
-  test "broken breaker can't handle any signal", %{breaker: breaker} do
-    {{:ok, :bad}, breaker} = destroy(breaker)
+  test "broken breaker can't handle any current", %{breaker: breaker} do
+    {{:error, :bad}, breaker} = destroy(breaker)
 
-    assert {:broken, breaker} = Breaker.handle(breaker, fn -> {:ok, :good} end)
-    assert %Breaker{counter: 1, state: :open, surges: 1} = breaker
+    assert Breaker.broken?(breaker)
+    assert_raise FunctionClauseError, fn -> Breaker.handle(breaker, {:ok, :good}) end
   end
 
   test "half open breaker healed successfully", %{breaker: breaker} do
@@ -42,7 +42,7 @@ defmodule TripSwitch.BreakerTest do
     breaker = Breaker.repair(breaker)
 
     assert %Breaker{state: :half_open} = breaker
-    assert {_result, breaker} = Breaker.handle(breaker, fn -> {:ok, :good} end)
+    assert {_result, breaker} = Breaker.handle(breaker, {:ok, :good})
     assert %Breaker{state: :closed} = breaker
   end
 
@@ -55,7 +55,5 @@ defmodule TripSwitch.BreakerTest do
     assert %Breaker{state: :open} = breaker
   end
 
-  defp destroy(breaker) do
-    Breaker.handle(breaker, fn -> {:break, :bad} end)
-  end
+  defp destroy(breaker), do: Breaker.handle(breaker, {:error, :bad})
 end
