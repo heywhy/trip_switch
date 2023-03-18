@@ -10,7 +10,7 @@ by adding `trip_switch` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:trip_switch, "~> 0.1.2"}
+    {:trip_switch, "~> 0.1.3"}
   ]
 end
 ```
