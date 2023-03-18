@@ -3,7 +3,7 @@ defmodule TripSwitch.Breaker do
   Documentation for `TripSwitch.Breaker`.
   """
 
-  defstruct [:surges, :counter, :state, :threshold, :fix_after]
+  defstruct [:surges, :counter, :state, :threshold, :repair_time]
 
   @type state :: :closed | :half_open | :open
   @type signal :: (() -> {:ok, term()} | {:break, term()})
@@ -13,7 +13,7 @@ defmodule TripSwitch.Breaker do
           surges: pos_integer(),
           counter: pos_integer(),
           threshold: pos_integer(),
-          fix_after: pos_integer()
+          repair_time: pos_integer()
         }
 
   @spec new(keyword()) :: t()
@@ -22,8 +22,8 @@ defmodule TripSwitch.Breaker do
       surges: 0,
       counter: 0,
       state: :closed,
-      fix_after: Keyword.get(opts, :fix_after, 0),
-      threshold: Keyword.fetch!(opts, :threshold)
+      threshold: Keyword.fetch!(opts, :threshold),
+      repair_time: Keyword.get(opts, :repair_time, 0)
     }
 
     struct!(__MODULE__, attrs)
@@ -34,7 +34,7 @@ defmodule TripSwitch.Breaker do
   def broken?(%__MODULE__{}), do: true
 
   @spec repairable?(t()) :: boolean()
-  def repairable?(%__MODULE__{fix_after: t} = breaker), do: broken?(breaker) and t > 0
+  def repairable?(%__MODULE__{repair_time: t} = breaker), do: broken?(breaker) and t > 0
 
   @spec handle(t(), signal()) :: {{:ok, term()} | :broken, t()}
   def handle(%__MODULE__{state: :open} = breaker, _signal), do: {:broken, breaker}

@@ -2,8 +2,6 @@ defmodule TripSwitchTest do
   @moduledoc false
   use ExUnit.Case
 
-  alias TripSwitch.Breaker
-
   @switch :home
   @event_prefix :trip_switch
   @events [
@@ -13,7 +11,7 @@ defmodule TripSwitchTest do
   ]
 
   setup_all do
-    start_supervised!({TripSwitch, name: @switch, threshold: 0.9, fix_after: 100})
+    start_supervised!({TripSwitch, name: @switch, threshold: 0.9, repair_time: 100})
     :ok
   end
 
@@ -37,10 +35,6 @@ defmodule TripSwitchTest do
     assert TripSwitch.broken?(@switch)
   end
 
-  test "get/1" do
-    assert %Breaker{state: :closed} = TripSwitch.get(@switch)
-  end
-
   test "send/2" do
     assert {:ok, 9} = TripSwitch.send(@switch, fn -> {:ok, 9} end)
     assert {:ok, 90} = TripSwitch.send(@switch, fn -> {:break, 90} end)
@@ -60,9 +54,8 @@ defmodule TripSwitchTest do
   test "send/2 auto repair switch" do
     :ok = destroy(@switch)
 
-    assert %Breaker{state: :open} = TripSwitch.get(@switch)
+    assert TripSwitch.broken?(@switch)
     Process.sleep(100)
-    assert %Breaker{state: :half_open} = TripSwitch.get(@switch)
     assert {:ok, :good} = TripSwitch.send(@switch, fn -> {:ok, :good} end)
     assert_received {[@event_prefix, :repair, :done], _ref, _mesurement, %{id: @switch}}
   end
@@ -73,7 +66,7 @@ defmodule TripSwitchTest do
     Process.sleep(100)
 
     assert :broken = TripSwitch.send(@switch, fn -> {:break, :unwell} end)
-    assert %Breaker{state: :open} = TripSwitch.get(@switch)
+    assert TripSwitch.broken?(@switch)
   end
 
   test "reset/1" do

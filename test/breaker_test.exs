@@ -5,7 +5,7 @@ defmodule TripSwitch.BreakerTest do
   alias TripSwitch.Breaker
 
   setup do
-    {:ok, breaker: Breaker.new(threshold: 1, fix_after: 1_000)}
+    {:ok, breaker: Breaker.new(threshold: 1, repair_time: 1_000)}
   end
 
   test "broken breaker with heal time repaired", %{breaker: breaker} do
@@ -15,7 +15,7 @@ defmodule TripSwitch.BreakerTest do
   end
 
   test "broken breaker with no heal time not repaired", %{breaker: breaker} do
-    {_result, breaker} = destroy(%{breaker | fix_after: 0})
+    {_result, breaker} = destroy(%{breaker | repair_time: 0})
 
     assert Breaker.repair(breaker) == breaker
   end
