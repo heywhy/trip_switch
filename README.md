@@ -1,6 +1,6 @@
 # TripSwitch
 
-**TODO: Add description**
+A circuit breaker implementation for Elixir, with ability to self-heal if needed.
 
 ## Installation
 

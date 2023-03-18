@@ -1,6 +1,16 @@
 defmodule TripSwitch.Breaker do
   @moduledoc """
-  Documentation for `TripSwitch.Breaker`.
+  This is the underlying model which the trip switch uses. A breaker
+  keeps track of number of signals it received and also the count
+  of surges it got from the signals it has handled. A breaker
+  has three states, `closed`, `open` and `half_open`. The
+  closed state is considered the working state while the
+  remaining states are broken states.
+
+  The only time a breaker enters the `half_open` state is when it just
+  got repaired after it got broken from a bad signal it handled. The
+  breaker is then transitioned into the `closed` state (if the next
+  signal is a good one) or `open` state (if the next signal is bad).
   """
 
   defstruct [:surges, :counter, :state, :threshold, :repair_time]
@@ -29,13 +39,22 @@ defmodule TripSwitch.Breaker do
     struct!(__MODULE__, attrs)
   end
 
+  @doc "Check if the breaker is broken."
   @spec broken?(t()) :: boolean()
   def broken?(%__MODULE__{state: :closed}), do: false
   def broken?(%__MODULE__{}), do: true
 
+  @doc """
+  Confirm if breaker is repairable.
+
+  A breaker is only repairable if it `repair_time` is greater than 0.
+  """
   @spec repairable?(t()) :: boolean()
   def repairable?(%__MODULE__{repair_time: t} = breaker), do: broken?(breaker) and t > 0
 
+  @doc """
+  Handle the given signal and transition the breaker state if needed.
+  """
   @spec handle(t(), signal()) :: {{:ok, term()} | :broken, t()}
   def handle(%__MODULE__{state: :open} = breaker, _signal), do: {:broken, breaker}
 
@@ -53,6 +72,7 @@ defmodule TripSwitch.Breaker do
     end
   end
 
+  @doc "Repair the breaker."
   @spec repair(t()) :: t()
   def repair(%__MODULE__{} = breaker) do
     case repairable?(breaker) do
@@ -61,6 +81,7 @@ defmodule TripSwitch.Breaker do
     end
   end
 
+  @doc "Reset breaker into its initial working state."
   @spec reset(t()) :: t()
   def reset(%__MODULE__{} = breaker) do
     struct!(breaker, state: :closed, counter: 0, surges: 0)
