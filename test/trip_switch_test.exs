@@ -1,6 +1,7 @@
 defmodule TripSwitchTest do
   @moduledoc false
   use ExUnit.Case
+  use TripSwitch.Test
 
   @switch :home
   @event_prefix :trip_switch
@@ -18,8 +19,7 @@ defmodule TripSwitchTest do
 
   setup do
     :telemetry_test.attach_event_handlers(self(), @events)
-
-    on_exit(fn -> TripSwitch.reset(@switch) end)
+    :ok
   end
 
   test "child_spec/1" do
