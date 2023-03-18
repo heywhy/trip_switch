@@ -59,21 +59,26 @@ defmodule TripSwitch do
   ## Telemetry
 
   Being a big fan of observability, this library exposes information about it internals
-  using the community approved library (`telemetry`). Below are events that this library
-  publishes. You can use the `telemetry_poller` library to poll these metrics.
+  using the community approved library (`telemetry`). You can use the `telemetry_poller`
+  library to poll these metrics. Below are events that this library publishes.
 
   Below are events published by `trip_switch`:
 
   * `[:trip_switch, :signal, :start]` - dispatched before a given signal is handled
-    * Measurement: `%{system_time: System.system_time()}`
-    * Metadata: `%{id: atom()}`
+    * Measurement: `%{system_time: system_time}`
+    * Metadata: `%{id: atom(), tag: String.t()}`
 
   * `[:trip_switch, :signal, :stop]` - dispatched after a given signal have been handled
     * Measurement: ` %{duration: native_time}`
-    * Metadata: `%{id: atom()}`
+    * Metadata: `%{id: atom(), tag: String.t()}`
 
-  * `[:trip_switch, :repair, :done]` - dispatched after an auto-repair have been completed
-    * Metadata: `%{id: atom()}`
+  * `[:trip_switch, :repair, :start]` - dispatched when auto-repair is scheduled
+    * Measurement: `%{system_time: system_time}`
+    * Metadata: `%{id: atom(), tag: String.t()}`
+
+  * `[:trip_switch, :repair, :stop]` - dispatched after an auto-repair have been completed
+    * Measurement: ` %{duration: native_time}`
+    * Metadata: `%{id: atom(), tag: String.t()}`
   """
   use GenServer
 
@@ -109,11 +114,13 @@ defmodule TripSwitch do
   """
   @spec send(atom(), Breaker.signal()) :: {:ok, term()} | :broken
   def send(id, signal) do
-    :telemetry.span([@event_prefix, :signal], %{id: id}, fn ->
+    metadata = %{id: id, tag: FlakeId.get()}
+
+    :telemetry.span([@event_prefix, :signal], metadata, fn ->
       with %Breaker{} = breaker <- get(id),
            {result, breaker} <- Breaker.handle(breaker, signal),
            :ok <- GenServer.call(via(id), {:save, breaker}) do
-        {result, %{id: id}}
+        {result, metadata}
       end
     end)
   end
@@ -169,14 +176,12 @@ defmodule TripSwitch do
   end
 
   @impl GenServer
-  def handle_info(:repair, %{breaker: breaker} = state) do
-    [id] = Registry.keys(TripSwitch.Registry, self())
-
+  def handle_info({:repair, start_time, tag}, %{breaker: breaker} = state) do
     state =
       Breaker.repair(breaker)
       |> schedule_or_cancel_repair(state)
 
-    :telemetry.execute([@event_prefix, :repair, :done], %{}, %{id: id})
+    :ok = emit_repair_stop_event(get_id(), start_time, tag)
 
     {:noreply, state}
   end
@@ -184,12 +189,18 @@ defmodule TripSwitch do
   defp schedule_or_cancel_repair(%Breaker{repair_time: at} = breaker, state) do
     with {:a, true} <- {:a, Breaker.repairable?(breaker)},
          {:b, false} <- {:b, is_reference(state.repair)},
-         timer <- Process.send_after(self(), :repair, at) do
+         {start_time, tag} <- emit_repair_start_event(get_id()),
+         timer <- Process.send_after(self(), {:repair, start_time, tag}, at) do
       %{state | breaker: breaker, repair: timer}
     else
       {:a, false} -> cancel_timer(%{state | breaker: breaker})
       {:b, true} -> %{state | breaker: breaker}
     end
+  end
+
+  defp get_id do
+    [id] = Registry.keys(TripSwitch.Registry, self())
+    id
   end
 
   defp cancel_timer(state) do
@@ -201,6 +212,29 @@ defmodule TripSwitch do
       nil ->
         state
     end
+  end
+
+  defp emit_repair_start_event(id) do
+    tag = FlakeId.get()
+    now = System.system_time()
+    metadata = %{id: id, tag: tag}
+    measurements = %{monotonic_time: System.monotonic_time(), system_time: now}
+
+    :ok = :telemetry.execute([@event_prefix, :repair, :start], measurements, metadata)
+
+    {now, tag}
+  end
+
+  defp emit_repair_stop_event(id, start_time, tag) do
+    now = System.monotonic_time()
+    metadata = %{id: id, tag: tag}
+
+    measurements = %{
+      monotonic_time: now,
+      duration: start_time - now
+    }
+
+    :ok = :telemetry.execute([@event_prefix, :repair, :stop], measurements, metadata)
   end
 
   defp get(id), do: GenServer.call(via(id), :get)

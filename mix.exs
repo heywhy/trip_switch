@@ -71,6 +71,7 @@ defmodule TripSwitch.MixProject do
       {:dialyxir, "~> 1.2", only: :dev, runtime: false},
       {:ex_doc, "~> 0.29", only: :dev, runtime: false},
       {:excoveralls, "~> 0.15", only: :test},
+      {:flake_id, "~> 0.1"},
       {:git_hooks, "~> 0.7", only: :dev, runtime: false},
       {:git_ops, "~> 2.5", only: :dev},
       {:telemetry, "~> 1.2"}
