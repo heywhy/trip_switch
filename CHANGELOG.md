@@ -5,6 +5,19 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.1.4](https://github.com/heywhy/trip_switch/compare/v0.1.3...v0.1.4) (2023-03-19)
+
+
+
+
+### Bug Fixes:
+
+* update breaker model
+
+* include a test helper
+
+* improve documentation
+
 ## [v0.1.3](https://github.com/heywhy/trip_switch/compare/v0.1.2...v0.1.3) (2023-03-18)
 
 
